@@ -1,24 +1,31 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"time"
 )
 
 var key string = os.Getenv("INVESTIGATE_KEY")
-var base_url string = "https://investigate.api.umbrella.com/"
+var base_url string = "https://investigate.api.umbrella.com"
+var domain = os.Args[1]
+var getCategory = Endpoint{"GET", base_url + "/domains/categorization/" + domain}
 
-func call(url, method string) (int, string) {
+type Endpoint struct {
+	method string
+	url    string
+}
+
+func call(E Endpoint) (int, string) {
 	client := &http.Client{
 		Timeout: time.Second * 10,
 	}
-	req, err := http.NewRequest(method, url, nil)
+	req, err := http.NewRequest(E.method, E.url, nil)
 	if err != nil {
-		log.Println(err)
+		fmt.Println(err)
 	}
 	req.Header.Set("Authorization", "Bearer "+key)
 	req.Header.Set("User-Agent", "Go app")
@@ -26,7 +33,7 @@ func call(url, method string) (int, string) {
 	req.Header.Set("Accept", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Println(err)
+		fmt.Println(err)
 	}
 	bodyStatus := resp.StatusCode
 	bodyBytes, _ := ioutil.ReadAll(resp.Body)
@@ -35,84 +42,18 @@ func call(url, method string) (int, string) {
 	return bodyStatus, bodyString
 }
 
-func getCategory(domain string) (int, string) {
-	endpoint := "domains/categorization/"
-	status, body := call(base_url+endpoint+domain, "GET")
-	return status, body
-}
-
-func getVolume(domain string) (int, string) {
-	endpoint := "domains/volume/"
-	status, body := call(base_url+endpoint+domain, "GET")
-	return status, body
-}
-
-func getCoocurances(domain string) (int, string) {
-	endpoint := "recommendations/name/"
-	status, body := call(base_url+endpoint+domain+".json", "GET")
-	return status, body
-}
-
-func getPdnsByName(domain string) (int, string) {
-	endpoint := "pdns/name/"
-	status, body := call(base_url+endpoint+domain, "GET")
-	return status, body
-}
-
-func getPdnsByDomain(domain string) (int, string) {
-	endpoint := "pdns/domain/"
-	status, body := call(base_url+endpoint+domain, "GET")
-	return status, body
-}
-
-func getPdnsByIp(domain string) (int, string) {
-	endpoint := "pdns/ip/"
-	status, body := call(base_url+endpoint+domain, "GET")
-	return status, body
-}
-
-func getRawPdns(domain string) (int, string) {
-	endpoint := "pdns/raw/"
-	status, body := call(base_url+endpoint+domain, "GET")
-	return status, body
-}
-
-func getRelatedDomaims(domain string) (int, string) {
-	endpoint := "links/name/"
-	status, body := call(base_url+endpoint+domain, "GET")
-	return status, body
-}
-
-func getSecurityInfo(domain string) (int, string) {
-	endpoint := "security/name/"
-	status, body := call(base_url+endpoint+domain, "GET")
-	return status, body
-}
-
-func getRiskScore(domain string) (int, string) {
-	endpoint := "domains/risk-score"
-	status, body := call(base_url+endpoint+domain, "GET")
-	return status, body
-}
-
-func getAsInfoByIp(domain string) (int, string) {
-	endpoint := "bgp_routes/ip"
-	status, body := call(base_url+endpoint+domain, "GET")
-	return status, body
-}
-
-func getAsInfoByAsn(domain string) (int, string) {
-	endpoint := "bgp_routes/asn"
-	status, body := call(base_url+endpoint+domain, "GET")
-	return status, body
-}
-
 func main() {
-	domain := os.Args[1]
-	status, body := getCategory(domain)
+	status, body := call(getCategory)
 	if status == 200 {
-		fmt.Printf(body)
+		bodyBytes := []byte(body)
+		jsonMap := make(map[string](interface{}))
+		err := json.Unmarshal([]byte(bodyBytes), &jsonMap)
+		if err != nil {
+			fmt.Printf(err.Error())
+		}
+		responseMap := jsonMap["facebook.com"].(map[string]interface{})
+		fmt.Printf("\nContent Categories: %s\n", responseMap["content_categories"])
 	} else {
-		fmt.Sprint(status)
+		fmt.Print(status)
 	}
 }
